@@ -24,10 +24,10 @@ export const hook = {
 
 export const theaterCopy = {
   id: 'theater',
-  eyebrow: 'Act 1 · Shopper theater',
-  title: 'She typed what she meant. Ordinary search heard keywords.',
+  eyebrow: 'Act 1 · Discovery suite',
+  title: 'Not a thin search demo — the full discovery loop.',
   subtitle:
-    'Watch Aurix parse a real beauty query, re-rank the shelf, and explain the fit — in one scroll.',
+    'Query → location + persona → compatibility scores → routine → PDP → cart. Scroll the suite.',
 } as const;
 
 export const merchCopy = {
