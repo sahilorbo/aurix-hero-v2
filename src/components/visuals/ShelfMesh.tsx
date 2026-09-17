@@ -20,35 +20,41 @@ const C = {
   white: '#FFFFFF',
 }
 
-/** Total loop length in seconds */
-const LOOP = 7.2
+/** Total loop length in seconds — readable ~15s pass (was ~7.2s) */
+const LOOP = 15
 
 const BEATS: { at: number; until: number; caption: string }[] = [
-  { at: 0.0, until: 1.15, caption: 'Query enters' },
-  { at: 1.15, until: 2.4, caption: 'Catalog fan-out' },
-  { at: 2.4, until: 3.7, caption: 'Compatibility scores' },
-  { at: 3.7, until: 5.0, caption: 'Weak matches fade' },
-  { at: 5.0, until: 7.2, caption: 'Winners + routine' },
+  { at: 0.0, until: 2.5, caption: 'Query enters' },
+  { at: 2.5, until: 5.2, caption: 'Catalog fan-out' },
+  { at: 5.2, until: 8.0, caption: 'Compatibility scores' },
+  { at: 8.0, until: 10.8, caption: 'Weak matches fade' },
+  { at: 10.8, until: 15.0, caption: 'Winners + routine' },
 ]
 
-function captionFor(t: number) {
-  for (const b of BEATS) {
-    if (t >= b.at && t < b.until) return b.caption
+function beatIndexFor(t: number) {
+  for (let i = 0; i < BEATS.length; i++) {
+    if (t >= BEATS[i].at && t < BEATS[i].until) return i
   }
-  return BEATS[BEATS.length - 1].caption
+  return BEATS.length - 1
+}
+
+/** Active = 1, past (persisted dim) = dim, future = 0 */
+function beatFocus(t: number, i: number, dim = 0.38) {
+  const active = beatIndexFor(t)
+  if (i > active) return 0
+  if (i === active) return 1
+  return dim
 }
 
 /**
  * Staged discovery story: query → fan-out → scores → weak fade → winners pulse.
- * ~7s loop with beat captions. Prefers-reduced-motion → final winning state.
+ * ~15s loop; prior beats persist dimmed. Prefers-reduced-motion → final winning state.
  */
 export function ShelfMesh() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const reduced = usePrefersReducedMotion()
-  const [caption, setCaption] = useState(
-    reduced ? 'Winners + routine' : BEATS[0].caption,
-  )
-  const captionRef = useRef(caption)
+  const [activeBeat, setActiveBeat] = useState(reduced ? BEATS.length - 1 : 0)
+  const activeBeatRef = useRef(activeBeat)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -126,11 +132,11 @@ export function ShelfMesh() {
     const seg = (t: number, a: number, b: number) =>
       clamp01((t - a) / Math.max(0.001, b - a))
 
-    const updateCaption = (t: number) => {
-      const next = captionFor(t)
-      if (next !== captionRef.current) {
-        captionRef.current = next
-        setCaption(next)
+    const updateActiveBeat = (t: number) => {
+      const next = beatIndexFor(t)
+      if (next !== activeBeatRef.current) {
+        activeBeatRef.current = next
+        setActiveBeat(next)
       }
     }
 
@@ -245,48 +251,73 @@ export function ShelfMesh() {
       ctx.textAlign = 'left'
     }
 
+    /** Beat 0 — query travels in; stays as dim marker after arrival */
     const drawQuery = (t: number) => {
-      const p = easeInOut(seg(t, 0.05, 1.0))
-      const qx = queryStart.x + (hub.x - queryStart.x) * Math.min(1, p)
-      const qy = queryStart.y + (hub.y - queryStart.y) * Math.min(1, p)
+      const focus = beatFocus(t, 0)
+      if (focus <= 0) return false
+
+      const p = easeInOut(seg(t, 0.15, 2.2))
       const arrived = p >= 0.98
+      const qx = arrived
+        ? hub.x
+        : queryStart.x + (hub.x - queryStart.x) * Math.min(1, p)
+      const qy = arrived
+        ? hub.y
+        : queryStart.y + (hub.y - queryStart.y) * Math.min(1, p)
+
+      // Persistent trail from start → hub (dims after beat 0)
+      ctx.beginPath()
+      ctx.moveTo(queryStart.x, queryStart.y)
+      ctx.lineTo(arrived ? hub.x : qx, arrived ? hub.y : qy)
+      ctx.strokeStyle = `rgba(255, 200, 87, ${(0.2 + p * 0.4) * focus})`
+      ctx.lineWidth = focus >= 1 ? 2 : 1.25
+      ctx.stroke()
 
       if (!arrived) {
         ctx.beginPath()
-        ctx.moveTo(queryStart.x, queryStart.y)
-        ctx.lineTo(qx, qy)
-        ctx.strokeStyle = `rgba(255, 200, 87, ${0.25 + p * 0.35})`
-        ctx.lineWidth = 2
-        ctx.stroke()
-
-        ctx.beginPath()
         ctx.arc(qx, qy, 5, 0, Math.PI * 2)
-        ctx.fillStyle = C.amber
+        ctx.fillStyle = `rgba(255, 200, 87, ${0.95 * focus})`
         ctx.fill()
         ctx.beginPath()
         ctx.arc(qx, qy, 10, 0, Math.PI * 2)
-        ctx.fillStyle = 'rgba(255, 200, 87, 0.2)'
+        ctx.fillStyle = `rgba(255, 200, 87, ${0.2 * focus})`
+        ctx.fill()
+      } else {
+        // Dim query marker at origin + brief absorb flash while active
+        ctx.beginPath()
+        ctx.arc(queryStart.x, queryStart.y, 3.5, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(255, 200, 87, ${0.55 * focus})`
         ctx.fill()
 
-        if (p < 0.7) {
-          ctx.font = '600 9px "IBM Plex Mono", monospace'
-          ctx.fillStyle = C.amber
-          ctx.fillText('query', qx + 10, qy - 8)
+        if (focus >= 1 && t < 2.9) {
+          const fade = 1 - seg(t, 2.2, 2.9)
+          ctx.beginPath()
+          ctx.arc(hub.x, hub.y, hub.r * (1.4 + fade), 0, Math.PI * 2)
+          ctx.strokeStyle = `rgba(255, 200, 87, ${0.5 * fade})`
+          ctx.lineWidth = 2
+          ctx.stroke()
         }
-      } else if (t < 1.4) {
-        // brief amber flash absorbed into hub
-        const fade = 1 - seg(t, 1.0, 1.4)
-        ctx.beginPath()
-        ctx.arc(hub.x, hub.y, hub.r * (1.4 + fade), 0, Math.PI * 2)
-        ctx.strokeStyle = `rgba(255, 200, 87, ${0.5 * fade})`
-        ctx.lineWidth = 2
-        ctx.stroke()
       }
+
+      // Persistent "query" label — strong while active, dim when past
+      const labelX = queryStart.x + (hub.x - queryStart.x) * 0.35
+      const labelY = queryStart.y - 12
+      ctx.font = '600 9px "IBM Plex Mono", monospace'
+      ctx.fillStyle =
+        focus >= 1
+          ? C.amber
+          : `rgba(255, 200, 87, ${0.45 * focus / 0.38})`
+      ctx.fillText('query', labelX, labelY)
+
       return arrived
     }
 
+    /** Beat 1 — catalog fan-out; spokes persist dimmed afterward */
     const drawFanOut = (t: number) => {
-      const p = easeInOut(seg(t, 1.15, 2.35))
+      const focus = beatFocus(t, 1)
+      if (focus <= 0) return
+
+      const p = easeInOut(seg(t, 2.5, 5.0))
       if (p <= 0) return
 
       for (let i = 0; i < skus.length; i++) {
@@ -298,14 +329,19 @@ export function ShelfMesh() {
         const ex = hub.x + (sku.x - hub.x) * lp
         const ey = hub.y + (sku.y - hub.y) * lp
 
+        // Past beat: keep faint completed spokes; active: bright grow
+        const alpha =
+          focus >= 1
+            ? 0.15 + lp * 0.4
+            : 0.08 * (focus / 0.38) * lp
         ctx.beginPath()
         ctx.moveTo(hub.x, hub.y)
         ctx.lineTo(ex, ey)
-        ctx.strokeStyle = `rgba(255, 200, 87, ${0.15 + lp * 0.35})`
-        ctx.lineWidth = 1.25
+        ctx.strokeStyle = `rgba(255, 200, 87, ${alpha})`
+        ctx.lineWidth = focus >= 1 ? 1.25 : 1
         ctx.stroke()
 
-        if (lp < 1) {
+        if (focus >= 1 && lp < 1) {
           drawDiamond(ctx, ex, ey, 3.2)
           ctx.fillStyle = 'rgba(255, 200, 87, 0.95)'
           ctx.fill()
@@ -313,9 +349,15 @@ export function ShelfMesh() {
       }
     }
 
+    /** Beat 2 — compatibility scores; rings/labels persist dimmed */
     const drawScores = (t: number) => {
-      const p = easeInOut(seg(t, 2.4, 3.55))
-      if (p <= 0) return p
+      const focus = beatFocus(t, 2)
+      if (focus <= 0) return 0
+
+      const p = t >= 5.2 ? easeInOut(seg(t, 5.2, 7.6)) : 0
+      if (p <= 0) return 0
+
+      const weakP = t >= 8.0 ? easeInOut(seg(t, 8.0, 10.5)) : 0
 
       for (let i = 0; i < skus.length; i++) {
         const sku = skus[i]
@@ -323,13 +365,18 @@ export function ShelfMesh() {
         const sp = clamp01((p - stagger) / 0.7)
         if (sp <= 0) continue
 
+        // Weak matches dim further once fade beat starts
+        const roleDim =
+          sku.role === 'weak' && weakP > 0 ? 1 - weakP * 0.7 : 1
+        const aMul = focus * roleDim
+
         const isStrong = sku.role === 'winner'
         ctx.beginPath()
         ctx.moveTo(hub.x, hub.y)
         ctx.lineTo(sku.x, sku.y)
         ctx.strokeStyle = isStrong
-          ? `rgba(168, 232, 156, ${0.12 + sp * 0.35})`
-          : `rgba(255, 200, 87, ${0.08 + sp * 0.2})`
+          ? `rgba(168, 232, 156, ${(0.12 + sp * 0.35) * aMul})`
+          : `rgba(255, 200, 87, ${(0.08 + sp * 0.2) * aMul})`
         ctx.lineWidth = isStrong ? 1.5 : 1
         ctx.stroke()
 
@@ -342,19 +389,24 @@ export function ShelfMesh() {
           -Math.PI / 2,
           -Math.PI / 2 + Math.PI * 2 * sku.score * sp,
         )
-        ctx.strokeStyle =
+        const ringColor =
           sku.role === 'winner'
             ? C.mintBright
             : sku.role === 'weak'
               ? C.coral
               : C.amber
-        ctx.lineWidth = 2
+        ctx.globalAlpha = aMul
+        ctx.strokeStyle = ringColor
+        ctx.lineWidth = focus >= 1 ? 2 : 1.4
         ctx.stroke()
+        ctx.globalAlpha = 1
 
-        if (sp > 0.6 && (sku.role === 'winner' || i % 4 === 0)) {
+        if (sp > 0.55 && (sku.role === 'winner' || i % 4 === 0)) {
           ctx.font = '600 8px "IBM Plex Mono", monospace'
           ctx.fillStyle =
-            sku.role === 'winner' ? C.mintBright : 'rgba(255,200,87,0.85)'
+            sku.role === 'winner'
+              ? `rgba(168, 232, 156, ${aMul})`
+              : `rgba(255, 200, 87, ${0.85 * aMul})`
           ctx.textAlign = 'center'
           ctx.fillText(`${Math.round(sku.score * 100)}`, sku.x, sku.y - ringR - 4)
           ctx.textAlign = 'left'
@@ -363,11 +415,15 @@ export function ShelfMesh() {
       return p
     }
 
-    const drawWeakFade = (t: number) => easeInOut(seg(t, 3.7, 4.9))
+    const drawWeakFade = (t: number) => easeInOut(seg(t, 8.0, 10.5))
 
+    /** Beat 4 — winners + routine mint pulse */
     const drawWinners = (t: number, pulseT: number) => {
-      const p = t >= 5.0 ? easeInOut(seg(t, 5.0, 6.2)) : 0
-      if (p <= 0) return p
+      const focus = beatFocus(t, 4, 0.5)
+      if (focus <= 0) return 0
+
+      const p = t >= 10.8 ? easeInOut(seg(t, 10.8, 13.2)) : 0
+      if (p <= 0) return 0
 
       if (winners.length >= 2) {
         const pairs: [number, number, string][] = [
@@ -378,17 +434,17 @@ export function ShelfMesh() {
           if (a === b || a == null || b == null) continue
           const na = skus[a]
           const nb = skus[b]
-          const pulse = 0.55 + Math.sin(pulseT * 3.2) * 0.35
+          const pulse = 0.55 + Math.sin(pulseT * 2.2) * 0.35
           ctx.beginPath()
           ctx.moveTo(na.x, na.y)
           ctx.lineTo(nb.x, nb.y)
-          ctx.strokeStyle = `rgba(168, 232, 156, ${p * pulse * 0.75})`
+          ctx.strokeStyle = `rgba(168, 232, 156, ${p * pulse * 0.75 * focus})`
           ctx.lineWidth = 2
           ctx.setLineDash([4, 4])
           ctx.stroke()
           ctx.setLineDash([])
 
-          if (p > 0.5) {
+          if (p > 0.45) {
             const mx = (na.x + nb.x) / 2
             const my = (na.y + nb.y) / 2
             ctx.font = '600 8px "IBM Plex Mono", monospace'
@@ -396,10 +452,13 @@ export function ShelfMesh() {
             roundRect(ctx, mx - lw / 2 - 5, my - 8, lw + 10, 14, 3)
             ctx.fillStyle = 'rgba(10, 17, 36, 0.88)'
             ctx.fill()
-            ctx.strokeStyle = `rgba(168, 232, 156, ${0.5 * p})`
+            ctx.strokeStyle = `rgba(168, 232, 156, ${0.5 * p * focus})`
             ctx.lineWidth = 1
             ctx.stroke()
-            ctx.fillStyle = C.mintBright
+            ctx.fillStyle =
+              focus >= 1
+                ? C.mintBright
+                : `rgba(168, 232, 156, ${0.7})`
             ctx.textAlign = 'center'
             ctx.fillText(label, mx, my + 3)
             ctx.textAlign = 'left'
@@ -409,11 +468,11 @@ export function ShelfMesh() {
 
       for (const wi of winners) {
         const sku = skus[wi]
-        const pulse = 0.6 + Math.sin(pulseT * 2.8 + sku.phase) * 0.4
+        const pulse = 0.6 + Math.sin(pulseT * 2.0 + sku.phase) * 0.4
         ctx.beginPath()
         ctx.moveTo(hub.x, hub.y)
         ctx.lineTo(sku.x, sku.y)
-        ctx.strokeStyle = `rgba(168, 232, 156, ${p * pulse * 0.7})`
+        ctx.strokeStyle = `rgba(168, 232, 156, ${p * pulse * 0.7 * focus})`
         ctx.lineWidth = 2
         ctx.stroke()
       }
@@ -422,7 +481,7 @@ export function ShelfMesh() {
     }
 
     const drawContextRing = (t: number) => {
-      const p = easeInOut(seg(t, 5.8, 6.8))
+      const p = easeInOut(seg(t, 12.2, 14.2))
       if (p <= 0) return
       ctx.beginPath()
       ctx.arc(hub.x, hub.y, hub.r * 4.2, 0, Math.PI * 2)
@@ -431,7 +490,7 @@ export function ShelfMesh() {
       ctx.setLineDash([3, 5])
       ctx.stroke()
       ctx.setLineDash([])
-      if (p > 0.4) {
+      if (p > 0.35) {
         ctx.font = '600 8px "IBM Plex Mono", monospace'
         ctx.fillStyle = `rgba(180, 200, 230, ${p * 0.85})`
         ctx.textAlign = 'center'
@@ -453,11 +512,11 @@ export function ShelfMesh() {
         let stroke: string = C.mint
         let r = sku.r
 
-        if (t < 1.15) {
+        if (t < 2.5) {
           fill = 'rgba(122, 148, 196, 0.35)'
           stroke = 'rgba(122, 148, 196, 0.5)'
-        } else if (t < 2.4) {
-          const wake = clamp01((seg(t, 1.15, 2.35) * skus.length - i) / 3)
+        } else if (t < 5.2) {
+          const wake = clamp01((seg(t, 2.5, 5.0) * skus.length - i) / 3)
           const alpha = 0.3 + wake * 0.45
           fill = `rgba(147, 183, 143, ${alpha})`
           stroke = C.mint
@@ -478,7 +537,7 @@ export function ShelfMesh() {
             const dim = 1 - weakP * 0.75
             fill = `rgba(224, 122, 95, ${0.25 + dim * 0.35})`
             stroke = `rgba(224, 122, 95, ${0.35 + dim * 0.4})`
-            if (weakP > 0.2) {
+            if (weakP > 0.15) {
               ctx.beginPath()
               ctx.moveTo(hub.x, hub.y)
               ctx.lineTo(sku.x, sku.y)
@@ -488,7 +547,7 @@ export function ShelfMesh() {
             }
           } else if (sku.role === 'winner') {
             const pulse =
-              1 + Math.sin(pulseT * 3 + sku.phase) * 0.12 * Math.max(winP, 0.3)
+              1 + Math.sin(pulseT * 2.1 + sku.phase) * 0.12 * Math.max(winP, 0.3)
             r = sku.r * pulse * (1 + winP * 0.2)
             fill = `rgba(168, 232, 156, ${0.7 + winP * 0.25})`
             stroke = C.mintBright
@@ -517,11 +576,17 @@ export function ShelfMesh() {
       const dotY = h - 14
       const total = BEATS.length
       const startX = w / 2 - ((total - 1) * 12) / 2
+      const active = beatIndexFor(t)
       for (let i = 0; i < total; i++) {
-        const active = t >= BEATS[i].at && t < BEATS[i].until
+        const isActive = i === active
+        const isPast = i < active
         ctx.beginPath()
-        ctx.arc(startX + i * 12, dotY, active ? 3.2 : 2.2, 0, Math.PI * 2)
-        ctx.fillStyle = active ? C.mintBright : 'rgba(122, 148, 196, 0.45)'
+        ctx.arc(startX + i * 12, dotY, isActive ? 3.2 : 2.2, 0, Math.PI * 2)
+        ctx.fillStyle = isActive
+          ? C.mintBright
+          : isPast
+            ? 'rgba(168, 232, 156, 0.4)'
+            : 'rgba(122, 148, 196, 0.35)'
         ctx.fill()
       }
       ctx.restore()
@@ -546,24 +611,17 @@ export function ShelfMesh() {
       drawGrid()
       drawShelfFrame()
 
+      // Draw past layers first (dim), active on top — progressive accumulation
       const arrived = drawQuery(t)
-      const scoreP = t >= 2.4 && t < 3.75 ? drawScores(t) : t >= 3.75 ? 1 : 0
-      if (t >= 2.4 && t < 3.75) {
-        /* scores drawn above */
-      } else if (t >= 3.75 && t < 5.0) {
-        // hold faint score spokes briefly into weak-fade
-        drawScores(3.5)
-      }
-
+      drawFanOut(t)
+      const scoreP = drawScores(t)
       const weakP = drawWeakFade(t)
       const winP = drawWinners(t, elapsed)
 
-      if (t >= 1.15 && t < 2.45) drawFanOut(t)
-
-      drawHub(arrived ? 0.7 + Math.sin(elapsed * 2) * 0.15 : 0.25, arrived)
+      drawHub(arrived ? 0.7 + Math.sin(elapsed * 1.4) * 0.15 : 0.25, arrived)
       drawSkus(t, scoreP, weakP, winP, elapsed)
 
-      if (t >= 5.8) drawContextRing(t)
+      if (t >= 12.2) drawContextRing(t)
 
       drawLegend()
       drawBeatDots(t)
@@ -572,23 +630,23 @@ export function ShelfMesh() {
     const draw = (now: number) => {
       const elapsed = (now - start) / 1000
       const t = elapsed % LOOP
-      updateCaption(t)
+      updateActiveBeat(t)
       paintScene(t, elapsed)
       raf = requestAnimationFrame(draw)
     }
 
     layout()
     if (reduced) {
-      captionRef.current = 'Winners + routine'
-      setCaption('Winners + routine')
-      paintScene(6.5, 6.5)
+      activeBeatRef.current = BEATS.length - 1
+      setActiveBeat(BEATS.length - 1)
+      paintScene(13.5, 13.5)
     } else {
       raf = requestAnimationFrame(draw)
     }
 
     const onResize = () => {
       layout()
-      if (reduced) paintScene(6.5, 6.5)
+      if (reduced) paintScene(13.5, 13.5)
     }
     window.addEventListener('resize', onResize)
     return () => {
@@ -607,7 +665,24 @@ export function ShelfMesh() {
         <span className="shelf-mesh__corner shelf-mesh__corner--bl" />
         <span className="shelf-mesh__corner shelf-mesh__corner--br" />
       </div>
-      <div className="shelf-mesh__caption" key={caption}>{caption}</div>
+      <div className="shelf-mesh__beats">
+        {BEATS.map((b, i) => {
+          if (i > activeBeat) return null
+          const isActive = i === activeBeat
+          return (
+            <span
+              key={b.caption}
+              className={
+                isActive
+                  ? 'shelf-mesh__beat shelf-mesh__beat--active'
+                  : 'shelf-mesh__beat shelf-mesh__beat--past'
+              }
+            >
+              {b.caption}
+            </span>
+          )
+        })}
+      </div>
     </div>
   )
 }
