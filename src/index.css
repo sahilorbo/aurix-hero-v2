@@ -560,6 +560,43 @@ code {
   border-top: none;
 }
 
+.shelf-mesh__caption {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #A8E89C;
+  background: rgba(10, 17, 36, 0.88);
+  border: 1px solid rgba(168, 232, 156, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: shelf-caption-in 280ms ease-out;
+}
+
+@keyframes shelf-caption-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelf-mesh__caption {
+    animation: none;
+  }
+}
+
 /* ─── Scroll scrub ─── */
 .scroll-scrub {
   display: flex;

@@ -1,38 +1,54 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 
-type Node = {
+type SkuRole = 'winner' | 'weak' | 'neutral'
+
+type SkuNode = {
   x: number
   y: number
   r: number
-  kind: 'sku' | 'hub' | 'signal'
-  /** sku subtype for color/shape: stocked | low | alert */
-  state: 'ok' | 'low' | 'alert'
+  role: SkuRole
+  score: number
   phase: number
-  pulse: number
 }
 
-/** Aurix brief palette — canvas-safe hex/rgba */
 const C = {
-  bluePage: '#0F1B39',
-  blueDeep: '#0A1124',
-  blueSoft: '#1A2947',
   mint: '#93B78F',
-  mintHover: '#7D9F73',
-  mintBright: '#A8E89C', // oklch(0.84 0.15 150)
-  coral: '#E07A5F', // oklch(0.70 0.15 25)
-  coralSoft: '#EFA890',
+  mintBright: '#A8E89C',
+  coral: '#E07A5F',
   amber: '#FFC857',
   white: '#FFFFFF',
 }
 
+/** Total loop length in seconds */
+const LOOP = 7.2
+
+const BEATS: { at: number; until: number; caption: string }[] = [
+  { at: 0.0, until: 1.15, caption: 'Query enters' },
+  { at: 1.15, until: 2.4, caption: 'Catalog fan-out' },
+  { at: 2.4, until: 3.7, caption: 'Compatibility scores' },
+  { at: 3.7, until: 5.0, caption: 'Weak matches fade' },
+  { at: 5.0, until: 7.2, caption: 'Winners + routine' },
+]
+
+function captionFor(t: number) {
+  for (const b of BEATS) {
+    if (t >= b.at && t < b.until) return b.caption
+  }
+  return BEATS[BEATS.length - 1].caption
+}
+
 /**
- * Groq-energy intelligent infrastructure: mesh grid + beauty-shelf silhouette.
- * Canvas — live nodes, signal hops, color-coded by type/state.
+ * Staged discovery story: query → fan-out → scores → weak fade → winners pulse.
+ * ~7s loop with beat captions. Prefers-reduced-motion → final winning state.
  */
 export function ShelfMesh() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const reduced = usePrefersReducedMotion()
+  const [caption, setCaption] = useState(
+    reduced ? 'Winners + routine' : BEATS[0].caption,
+  )
+  const captionRef = useRef(caption)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -41,15 +57,17 @@ export function ShelfMesh() {
     if (!ctx) return
 
     let raf = 0
-    let t = 0
-    let nodes: Node[] = []
-    let links: [number, number][] = []
+    let start = performance.now()
     let w = 0
     let h = 0
     let dpr = 1
 
-    const shelfRows = 4
-    const shelfCols = 6
+    const shelfRows = 3
+    const shelfCols = 5
+    let hub = { x: 0, y: 0, r: 9 }
+    let skus: SkuNode[] = []
+    let winners: number[] = []
+    let queryStart = { x: 0, y: 0 }
 
     const layout = () => {
       const rect = canvas.getBoundingClientRect()
@@ -60,151 +78,91 @@ export function ShelfMesh() {
       canvas.height = Math.floor(h * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-      nodes = []
-      links = []
+      hub = { x: w * 0.28, y: h * 0.48, r: Math.max(8, Math.min(11, w * 0.018)) }
+      queryStart = { x: w * 0.06, y: h * 0.48 }
 
-      // Central hub — largest, mint-bright core
-      nodes.push({
-        x: w * 0.52,
-        y: h * 0.48,
-        r: 8,
-        kind: 'hub',
-        state: 'ok',
-        phase: 0,
-        pulse: 1.2,
-      })
-
-      // Shelf silhouette grid of SKU nodes
-      const shelfLeft = w * 0.18
-      const shelfRight = w * 0.88
-      const shelfTop = h * 0.18
-      const shelfBottom = h * 0.78
+      const shelfLeft = w * 0.42
+      const shelfRight = w * 0.9
+      const shelfTop = h * 0.22
+      const shelfBottom = h * 0.76
       const cellW = (shelfRight - shelfLeft) / (shelfCols - 1)
       const cellH = (shelfBottom - shelfTop) / (shelfRows - 1)
 
+      const winnerCells = new Set([1, 7, 11])
+      const weakCells = new Set([3, 5, 9, 13])
+
+      skus = []
+      winners = []
       for (let row = 0; row < shelfRows; row++) {
         for (let col = 0; col < shelfCols; col++) {
-          const jitterX = ((row * 7 + col * 13) % 5) - 2
-          const jitterY = ((row * 11 + col * 3) % 5) - 2
           const i = row * shelfCols + col
-          // Mix of stocked / low / alert for color coding
-          const state: Node['state'] =
-            i % 11 === 0 ? 'alert' : i % 5 === 0 ? 'low' : 'ok'
-          nodes.push({
-            x: shelfLeft + col * cellW + jitterX,
-            y: shelfTop + row * cellH + jitterY,
-            r: state === 'alert' ? 4.4 : state === 'low' ? 3.8 : 3.2 + ((row + col) % 3) * 0.5,
-            kind: 'sku',
-            state,
-            phase: i * 0.35,
-            pulse: 0.6 + ((row + col) % 4) * 0.15,
+          const role: SkuRole = winnerCells.has(i)
+            ? 'winner'
+            : weakCells.has(i)
+              ? 'weak'
+              : 'neutral'
+          const score =
+            role === 'winner'
+              ? 0.88 + (i % 3) * 0.04
+              : role === 'weak'
+                ? 0.18 + (i % 3) * 0.06
+                : 0.42 + (i % 4) * 0.05
+          skus.push({
+            x: shelfLeft + col * cellW,
+            y: shelfTop + row * cellH,
+            r: role === 'winner' ? 5.5 : 4.2,
+            role,
+            score,
+            phase: i * 0.4,
           })
-        }
-      }
-
-      // Orbiting signal nodes — amber
-      for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2
-        nodes.push({
-          x: w * 0.52 + Math.cos(a) * w * 0.28,
-          y: h * 0.48 + Math.sin(a) * h * 0.22,
-          r: 3,
-          kind: 'signal',
-          state: 'ok',
-          phase: i * 1.1,
-          pulse: 0.9,
-        })
-      }
-
-      // Links: hub → every sku + adjacent skus
-      for (let i = 1; i < nodes.length; i++) {
-        if (nodes[i].kind === 'sku' && (i + t) % 3 === 0) {
-          links.push([0, i])
-        }
-      }
-      for (let row = 0; row < shelfRows; row++) {
-        for (let col = 0; col < shelfCols; col++) {
-          const idx = 1 + row * shelfCols + col
-          if (col < shelfCols - 1) links.push([idx, idx + 1])
-          if (row < shelfRows - 1) links.push([idx, idx + shelfCols])
+          if (role === 'winner') winners.push(skus.length - 1)
         }
       }
     }
 
-    const drawShelfSilhouette = () => {
-      const left = w * 0.12
-      const right = w * 0.92
-      const top = h * 0.12
-      const bottom = h * 0.86
-      const depth = Math.min(28, w * 0.04)
+    const easeInOut = (t: number) =>
+      t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+    const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
+    const seg = (t: number, a: number, b: number) =>
+      clamp01((t - a) / Math.max(0.001, b - a))
+
+    const updateCaption = (t: number) => {
+      const next = captionFor(t)
+      if (next !== captionRef.current) {
+        captionRef.current = next
+        setCaption(next)
+      }
+    }
+
+    const drawShelfFrame = () => {
+      const left = w * 0.38
+      const right = w * 0.94
+      const top = h * 0.14
+      const bottom = h * 0.84
 
       ctx.save()
-      // Cool blue frame — separable from mint mesh
-      ctx.strokeStyle = 'rgba(122, 148, 196, 0.42)'
-      ctx.lineWidth = 1.5
-
-      ctx.beginPath()
-      ctx.moveTo(left, top)
-      ctx.lineTo(right, top)
-      ctx.lineTo(right + depth * 0.4, top + depth)
-      ctx.lineTo(left + depth * 0.4, top + depth)
-      ctx.closePath()
+      ctx.strokeStyle = 'rgba(122, 148, 196, 0.35)'
+      ctx.lineWidth = 1.25
+      roundRect(ctx, left, top, right - left, bottom - top, 6)
       ctx.stroke()
 
-      ctx.beginPath()
-      ctx.moveTo(left, top)
-      ctx.lineTo(left, bottom)
-      ctx.lineTo(left + depth * 0.4, bottom - depth * 0.3)
-      ctx.lineTo(left + depth * 0.4, top + depth)
-      ctx.stroke()
-
-      ctx.beginPath()
-      ctx.moveTo(right, top)
-      ctx.lineTo(right, bottom)
-      ctx.lineTo(right + depth * 0.4, bottom - depth * 0.3)
-      ctx.lineTo(right + depth * 0.4, top + depth)
-      ctx.stroke()
-
-      // Shelf planks — muted blue-white, not mint
-      for (let i = 0; i < 4; i++) {
-        const y = top + ((bottom - top) * (i + 1)) / 5
+      for (let i = 1; i < shelfRows; i++) {
+        const y = top + ((bottom - top) * i) / shelfRows
         ctx.beginPath()
-        ctx.moveTo(left + 6, y)
-        ctx.lineTo(right - 6, y)
-        ctx.strokeStyle = 'rgba(26, 41, 71, 0.95)'
-        ctx.lineWidth = 2
-        ctx.stroke()
-        ctx.beginPath()
-        ctx.moveTo(left + 6, y)
-        ctx.lineTo(right - 6, y)
-        ctx.strokeStyle = 'rgba(180, 200, 230, 0.22)'
+        ctx.moveTo(left + 8, y)
+        ctx.lineTo(right - 8, y)
+        ctx.strokeStyle = 'rgba(180, 200, 230, 0.14)'
         ctx.lineWidth = 1
         ctx.stroke()
-
-        // bottle silhouettes — cool slate, distinct from SKU nodes
-        for (let b = 0; b < 5; b++) {
-          const bx = left + 28 + b * ((right - left - 56) / 4)
-          const bh = 14 + ((i + b) % 3) * 6
-          ctx.fillStyle = 'rgba(26, 41, 71, 0.65)'
-          roundRect(ctx, bx - 5, y - bh - 2, 10, bh, 2)
-          ctx.fill()
-          ctx.strokeStyle = 'rgba(180, 200, 230, 0.28)'
-          ctx.lineWidth = 1
-          ctx.stroke()
-          ctx.fillStyle = 'rgba(180, 200, 230, 0.22)'
-          roundRect(ctx, bx - 3, y - bh - 6, 6, 5, 1)
-          ctx.fill()
-        }
       }
       ctx.restore()
     }
 
     const drawGrid = () => {
       ctx.save()
-      // Deep navy grid — quieter than shelf + mesh
-      ctx.strokeStyle = 'rgba(26, 41, 71, 0.85)'
+      ctx.strokeStyle = 'rgba(26, 41, 71, 0.7)'
       ctx.lineWidth = 1
-      const step = 36
+      const step = 40
       for (let x = 0; x < w; x += step) {
         ctx.beginPath()
         ctx.moveTo(x, 0)
@@ -217,199 +175,420 @@ export function ShelfMesh() {
         ctx.lineTo(w, y)
         ctx.stroke()
       }
-      // hairline white overlay for slight lift
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)'
-      for (let x = 0; x < w; x += step) {
-        ctx.beginPath()
-        ctx.moveTo(x + 0.5, 0)
-        ctx.lineTo(x + 0.5, h)
+      ctx.restore()
+    }
+
+    const drawLegend = () => {
+      ctx.save()
+      ctx.font = '600 9px "IBM Plex Mono", monospace'
+      const chips: { label: string; fill: string; stroke: string }[] = [
+        { label: 'HUB', fill: 'rgba(168, 232, 156, 0.95)', stroke: C.mintBright },
+        { label: 'SKU', fill: 'rgba(147, 183, 143, 0.9)', stroke: C.mint },
+        { label: 'SIGNAL', fill: 'rgba(255, 200, 87, 0.95)', stroke: C.amber },
+        { label: 'LOSS', fill: 'rgba(224, 122, 95, 0.95)', stroke: C.coral },
+      ]
+      let cx = w - 12
+      for (let i = chips.length - 1; i >= 0; i--) {
+        const chip = chips[i]
+        const cw = ctx.measureText(chip.label).width + 26
+        cx -= cw + 5
+        roundRect(ctx, cx, 8, cw, 20, 4)
+        ctx.fillStyle = 'rgba(10, 17, 36, 0.9)'
+        ctx.fill()
+        ctx.strokeStyle = chip.stroke
+        ctx.lineWidth = 1
         ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(cx + 10, 18, 3.5, 0, Math.PI * 2)
+        ctx.fillStyle = chip.fill
+        ctx.fill()
+        ctx.fillStyle = 'rgba(255,255,255,0.88)'
+        ctx.fillText(chip.label, cx + 18, 21.5)
+      }
+
+      const title = 'DISCOVERY · LIVE'
+      const tw = ctx.measureText(title).width
+      roundRect(ctx, 10, 8, tw + 16, 20, 4)
+      ctx.fillStyle = 'rgba(15, 27, 57, 0.85)'
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(168, 232, 156, 0.5)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      ctx.fillStyle = C.mintBright
+      ctx.fillText(title, 18, 21.5)
+      ctx.restore()
+    }
+
+    const drawHub = (glow: number, queryArrived: boolean) => {
+      const r = hub.r
+      ctx.beginPath()
+      ctx.arc(hub.x, hub.y, r * (2.8 + glow * 0.6), 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(168, 232, 156, ${0.06 + glow * 0.1})`
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(hub.x, hub.y, r * 1.7, 0, Math.PI * 2)
+      ctx.strokeStyle = `rgba(168, 232, 156, ${0.35 + glow * 0.4})`
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.arc(hub.x, hub.y, r, 0, Math.PI * 2)
+      ctx.fillStyle = queryArrived ? C.mintBright : 'rgba(147, 183, 143, 0.55)'
+      ctx.fill()
+      ctx.strokeStyle = C.white
+      ctx.lineWidth = 1.25
+      ctx.stroke()
+
+      ctx.font = '600 9px "IBM Plex Mono", monospace'
+      ctx.fillStyle = 'rgba(255,255,255,0.65)'
+      ctx.textAlign = 'center'
+      ctx.fillText('HUB', hub.x, hub.y + r + 14)
+      ctx.textAlign = 'left'
+    }
+
+    const drawQuery = (t: number) => {
+      const p = easeInOut(seg(t, 0.05, 1.0))
+      const qx = queryStart.x + (hub.x - queryStart.x) * Math.min(1, p)
+      const qy = queryStart.y + (hub.y - queryStart.y) * Math.min(1, p)
+      const arrived = p >= 0.98
+
+      if (!arrived) {
+        ctx.beginPath()
+        ctx.moveTo(queryStart.x, queryStart.y)
+        ctx.lineTo(qx, qy)
+        ctx.strokeStyle = `rgba(255, 200, 87, ${0.25 + p * 0.35})`
+        ctx.lineWidth = 2
+        ctx.stroke()
+
+        ctx.beginPath()
+        ctx.arc(qx, qy, 5, 0, Math.PI * 2)
+        ctx.fillStyle = C.amber
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(qx, qy, 10, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(255, 200, 87, 0.2)'
+        ctx.fill()
+
+        if (p < 0.7) {
+          ctx.font = '600 9px "IBM Plex Mono", monospace'
+          ctx.fillStyle = C.amber
+          ctx.fillText('query', qx + 10, qy - 8)
+        }
+      } else if (t < 1.4) {
+        // brief amber flash absorbed into hub
+        const fade = 1 - seg(t, 1.0, 1.4)
+        ctx.beginPath()
+        ctx.arc(hub.x, hub.y, hub.r * (1.4 + fade), 0, Math.PI * 2)
+        ctx.strokeStyle = `rgba(255, 200, 87, ${0.5 * fade})`
+        ctx.lineWidth = 2
+        ctx.stroke()
+      }
+      return arrived
+    }
+
+    const drawFanOut = (t: number) => {
+      const p = easeInOut(seg(t, 1.15, 2.35))
+      if (p <= 0) return
+
+      for (let i = 0; i < skus.length; i++) {
+        const sku = skus[i]
+        const stagger = (i / skus.length) * 0.35
+        const lp = clamp01((p - stagger) / Math.max(0.2, 1 - stagger * 0.5))
+        if (lp <= 0) continue
+
+        const ex = hub.x + (sku.x - hub.x) * lp
+        const ey = hub.y + (sku.y - hub.y) * lp
+
+        ctx.beginPath()
+        ctx.moveTo(hub.x, hub.y)
+        ctx.lineTo(ex, ey)
+        ctx.strokeStyle = `rgba(255, 200, 87, ${0.15 + lp * 0.35})`
+        ctx.lineWidth = 1.25
+        ctx.stroke()
+
+        if (lp < 1) {
+          drawDiamond(ctx, ex, ey, 3.2)
+          ctx.fillStyle = 'rgba(255, 200, 87, 0.95)'
+          ctx.fill()
+        }
+      }
+    }
+
+    const drawScores = (t: number) => {
+      const p = easeInOut(seg(t, 2.4, 3.55))
+      if (p <= 0) return p
+
+      for (let i = 0; i < skus.length; i++) {
+        const sku = skus[i]
+        const stagger = (i % 5) * 0.08
+        const sp = clamp01((p - stagger) / 0.7)
+        if (sp <= 0) continue
+
+        const isStrong = sku.role === 'winner'
+        ctx.beginPath()
+        ctx.moveTo(hub.x, hub.y)
+        ctx.lineTo(sku.x, sku.y)
+        ctx.strokeStyle = isStrong
+          ? `rgba(168, 232, 156, ${0.12 + sp * 0.35})`
+          : `rgba(255, 200, 87, ${0.08 + sp * 0.2})`
+        ctx.lineWidth = isStrong ? 1.5 : 1
+        ctx.stroke()
+
+        const ringR = sku.r + 6
+        ctx.beginPath()
+        ctx.arc(
+          sku.x,
+          sku.y,
+          ringR,
+          -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * sku.score * sp,
+        )
+        ctx.strokeStyle =
+          sku.role === 'winner'
+            ? C.mintBright
+            : sku.role === 'weak'
+              ? C.coral
+              : C.amber
+        ctx.lineWidth = 2
+        ctx.stroke()
+
+        if (sp > 0.6 && (sku.role === 'winner' || i % 4 === 0)) {
+          ctx.font = '600 8px "IBM Plex Mono", monospace'
+          ctx.fillStyle =
+            sku.role === 'winner' ? C.mintBright : 'rgba(255,200,87,0.85)'
+          ctx.textAlign = 'center'
+          ctx.fillText(`${Math.round(sku.score * 100)}`, sku.x, sku.y - ringR - 4)
+          ctx.textAlign = 'left'
+        }
+      }
+      return p
+    }
+
+    const drawWeakFade = (t: number) => easeInOut(seg(t, 3.7, 4.9))
+
+    const drawWinners = (t: number, pulseT: number) => {
+      const p = t >= 5.0 ? easeInOut(seg(t, 5.0, 6.2)) : 0
+      if (p <= 0) return p
+
+      if (winners.length >= 2) {
+        const pairs: [number, number, string][] = [
+          [winners[0], winners[1], 'similar'],
+          [winners[1], winners[2] ?? winners[0], 'routine'],
+        ]
+        for (const [a, b, label] of pairs) {
+          if (a === b || a == null || b == null) continue
+          const na = skus[a]
+          const nb = skus[b]
+          const pulse = 0.55 + Math.sin(pulseT * 3.2) * 0.35
+          ctx.beginPath()
+          ctx.moveTo(na.x, na.y)
+          ctx.lineTo(nb.x, nb.y)
+          ctx.strokeStyle = `rgba(168, 232, 156, ${p * pulse * 0.75})`
+          ctx.lineWidth = 2
+          ctx.setLineDash([4, 4])
+          ctx.stroke()
+          ctx.setLineDash([])
+
+          if (p > 0.5) {
+            const mx = (na.x + nb.x) / 2
+            const my = (na.y + nb.y) / 2
+            ctx.font = '600 8px "IBM Plex Mono", monospace'
+            const lw = ctx.measureText(label).width
+            roundRect(ctx, mx - lw / 2 - 5, my - 8, lw + 10, 14, 3)
+            ctx.fillStyle = 'rgba(10, 17, 36, 0.88)'
+            ctx.fill()
+            ctx.strokeStyle = `rgba(168, 232, 156, ${0.5 * p})`
+            ctx.lineWidth = 1
+            ctx.stroke()
+            ctx.fillStyle = C.mintBright
+            ctx.textAlign = 'center'
+            ctx.fillText(label, mx, my + 3)
+            ctx.textAlign = 'left'
+          }
+        }
+      }
+
+      for (const wi of winners) {
+        const sku = skus[wi]
+        const pulse = 0.6 + Math.sin(pulseT * 2.8 + sku.phase) * 0.4
+        ctx.beginPath()
+        ctx.moveTo(hub.x, hub.y)
+        ctx.lineTo(sku.x, sku.y)
+        ctx.strokeStyle = `rgba(168, 232, 156, ${p * pulse * 0.7})`
+        ctx.lineWidth = 2
+        ctx.stroke()
+      }
+
+      return p
+    }
+
+    const drawContextRing = (t: number) => {
+      const p = easeInOut(seg(t, 5.8, 6.8))
+      if (p <= 0) return
+      ctx.beginPath()
+      ctx.arc(hub.x, hub.y, hub.r * 4.2, 0, Math.PI * 2)
+      ctx.strokeStyle = `rgba(122, 148, 196, ${0.15 + p * 0.35})`
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([3, 5])
+      ctx.stroke()
+      ctx.setLineDash([])
+      if (p > 0.4) {
+        ctx.font = '600 8px "IBM Plex Mono", monospace'
+        ctx.fillStyle = `rgba(180, 200, 230, ${p * 0.85})`
+        ctx.textAlign = 'center'
+        ctx.fillText('persona · locale', hub.x, hub.y - hub.r * 4.2 - 6)
+        ctx.textAlign = 'left'
+      }
+    }
+
+    const drawSkus = (
+      t: number,
+      scoreP: number,
+      weakP: number,
+      winP: number,
+      pulseT: number,
+    ) => {
+      for (let i = 0; i < skus.length; i++) {
+        const sku = skus[i]
+        let fill = 'rgba(147, 183, 143, 0.55)'
+        let stroke: string = C.mint
+        let r = sku.r
+
+        if (t < 1.15) {
+          fill = 'rgba(122, 148, 196, 0.35)'
+          stroke = 'rgba(122, 148, 196, 0.5)'
+        } else if (t < 2.4) {
+          const wake = clamp01((seg(t, 1.15, 2.35) * skus.length - i) / 3)
+          const alpha = 0.3 + wake * 0.45
+          fill = `rgba(147, 183, 143, ${alpha})`
+          stroke = C.mint
+        } else if (scoreP > 0 && weakP < 0.1) {
+          if (sku.role === 'winner') {
+            fill = `rgba(168, 232, 156, ${0.55 + scoreP * 0.4})`
+            stroke = C.mintBright
+            r = sku.r * (1 + scoreP * 0.15)
+          } else if (sku.role === 'weak') {
+            fill = `rgba(255, 200, 87, ${0.4 + scoreP * 0.25})`
+            stroke = C.amber
+          } else {
+            fill = `rgba(147, 183, 143, ${0.4 + scoreP * 0.2})`
+            stroke = C.mint
+          }
+        } else {
+          if (sku.role === 'weak') {
+            const dim = 1 - weakP * 0.75
+            fill = `rgba(224, 122, 95, ${0.25 + dim * 0.35})`
+            stroke = `rgba(224, 122, 95, ${0.35 + dim * 0.4})`
+            if (weakP > 0.2) {
+              ctx.beginPath()
+              ctx.moveTo(hub.x, hub.y)
+              ctx.lineTo(sku.x, sku.y)
+              ctx.strokeStyle = `rgba(224, 122, 95, ${0.08 + (1 - weakP) * 0.15})`
+              ctx.lineWidth = 1
+              ctx.stroke()
+            }
+          } else if (sku.role === 'winner') {
+            const pulse =
+              1 + Math.sin(pulseT * 3 + sku.phase) * 0.12 * Math.max(winP, 0.3)
+            r = sku.r * pulse * (1 + winP * 0.2)
+            fill = `rgba(168, 232, 156, ${0.7 + winP * 0.25})`
+            stroke = C.mintBright
+            ctx.beginPath()
+            ctx.arc(sku.x, sku.y, r * 2.2, 0, Math.PI * 2)
+            ctx.fillStyle = `rgba(168, 232, 156, ${0.08 + winP * 0.14})`
+            ctx.fill()
+          } else {
+            fill = `rgba(122, 148, 196, ${0.2 + (1 - weakP) * 0.2})`
+            stroke = 'rgba(122, 148, 196, 0.45)'
+          }
+        }
+
+        ctx.beginPath()
+        ctx.arc(sku.x, sku.y, r, 0, Math.PI * 2)
+        ctx.fillStyle = fill
+        ctx.fill()
+        ctx.strokeStyle = stroke
+        ctx.lineWidth = sku.role === 'winner' && winP > 0.3 ? 1.75 : 1.15
+        ctx.stroke()
+      }
+    }
+
+    const drawBeatDots = (t: number) => {
+      ctx.save()
+      const dotY = h - 14
+      const total = BEATS.length
+      const startX = w / 2 - ((total - 1) * 12) / 2
+      for (let i = 0; i < total; i++) {
+        const active = t >= BEATS[i].at && t < BEATS[i].until
+        ctx.beginPath()
+        ctx.arc(startX + i * 12, dotY, active ? 3.2 : 2.2, 0, Math.PI * 2)
+        ctx.fillStyle = active ? C.mintBright : 'rgba(122, 148, 196, 0.45)'
+        ctx.fill()
       }
       ctx.restore()
     }
 
-    const skuFill = (state: Node['state'], alpha: number) => {
-      if (state === 'alert') return `rgba(224, 122, 95, ${alpha})`
-      if (state === 'low') return `rgba(255, 200, 87, ${alpha})`
-      return `rgba(147, 183, 143, ${alpha})`
-    }
-
-    const skuStroke = (state: Node['state']) => {
-      if (state === 'alert') return C.coralSoft
-      if (state === 'low') return C.amber
-      return C.mintBright
-    }
-
-    const drawDiamond = (x: number, y: number, r: number) => {
-      ctx.beginPath()
-      ctx.moveTo(x, y - r)
-      ctx.lineTo(x + r, y)
-      ctx.lineTo(x, y + r)
-      ctx.lineTo(x - r, y)
-      ctx.closePath()
-    }
-
-    const draw = () => {
-      t += reduced ? 0 : 0.016
+    const paintScene = (t: number, elapsed: number) => {
       ctx.clearRect(0, 0, w, h)
-
-      // Ambient radial wash — blue + mint
-      const g = ctx.createRadialGradient(w * 0.55, h * 0.4, 20, w * 0.55, h * 0.45, w * 0.55)
-      g.addColorStop(0, 'rgba(168, 232, 156, 0.1)')
-      g.addColorStop(0.35, 'rgba(26, 41, 71, 0.45)')
+      const g = ctx.createRadialGradient(
+        w * 0.45,
+        h * 0.42,
+        20,
+        w * 0.5,
+        h * 0.45,
+        w * 0.55,
+      )
+      g.addColorStop(0, 'rgba(168, 232, 156, 0.07)')
+      g.addColorStop(0.4, 'rgba(26, 41, 71, 0.4)')
       g.addColorStop(1, 'rgba(15, 27, 57, 0)')
       ctx.fillStyle = g
       ctx.fillRect(0, 0, w, h)
 
       drawGrid()
-      drawShelfSilhouette()
+      drawShelfFrame()
 
-      // Links with traveling packets — idle vs active vs hub hops
-      for (let i = 0; i < links.length; i++) {
-        const [a, b] = links[i]
-        const na = nodes[a]
-        const nb = nodes[b]
-        if (!na || !nb) continue
-        const active = (Math.sin(t * 1.4 + i * 0.37) + 1) * 0.5
-        const isHub = na.kind === 'hub' || nb.kind === 'hub'
-        const touchesAlert =
-          na.state === 'alert' || nb.state === 'alert' || na.state === 'low' || nb.state === 'low'
-
-        ctx.beginPath()
-        ctx.moveTo(na.x, na.y)
-        ctx.lineTo(nb.x, nb.y)
-
-        if (isHub) {
-          // Hub spokes: mint when hot, coral-tinted when linked to alert SKU
-          if (touchesAlert && active > 0.55) {
-            ctx.strokeStyle = `rgba(224, 122, 95, ${0.18 + active * 0.45})`
-          } else {
-            ctx.strokeStyle = `rgba(168, 232, 156, ${0.12 + active * 0.42})`
-          }
-          ctx.lineWidth = 1.6
-        } else if (active > 0.72) {
-          // Active mesh hop — bright mint
-          ctx.strokeStyle = `rgba(147, 183, 143, ${0.18 + active * 0.28})`
-          ctx.lineWidth = 1.25
-        } else {
-          // Idle mesh — cool blue-white, clearly different from mint hops
-          ctx.strokeStyle = `rgba(122, 148, 196, ${0.08 + active * 0.1})`
-          ctx.lineWidth = 1
-        }
-        ctx.stroke()
-
-        // Traveling packet hops
-        if (!reduced && (i + Math.floor(t * 2)) % 7 === 0) {
-          const p = (t * 0.55 + i * 0.13) % 1
-          const px = na.x + (nb.x - na.x) * p
-          const py = na.y + (nb.y - na.y) * p
-          ctx.beginPath()
-          ctx.arc(px, py, isHub ? 2.6 : 2.1, 0, Math.PI * 2)
-          if (isHub && touchesAlert) {
-            ctx.fillStyle = 'rgba(224, 122, 95, 0.95)'
-          } else if (isHub) {
-            ctx.fillStyle = 'rgba(168, 232, 156, 0.95)'
-          } else {
-            ctx.fillStyle = 'rgba(255, 200, 87, 0.9)'
-          }
-          ctx.fill()
-          // soft glow
-          ctx.beginPath()
-          ctx.arc(px, py, isHub ? 5 : 4, 0, Math.PI * 2)
-          ctx.fillStyle = isHub
-            ? touchesAlert
-              ? 'rgba(224, 122, 95, 0.18)'
-              : 'rgba(168, 232, 156, 0.18)'
-            : 'rgba(255, 200, 87, 0.15)'
-          ctx.fill()
-        }
+      const arrived = drawQuery(t)
+      const scoreP = t >= 2.4 && t < 3.75 ? drawScores(t) : t >= 3.75 ? 1 : 0
+      if (t >= 2.4 && t < 3.75) {
+        /* scores drawn above */
+      } else if (t >= 3.75 && t < 5.0) {
+        // hold faint score spokes briefly into weak-fade
+        drawScores(3.5)
       }
 
-      // Nodes
-      for (const n of nodes) {
-        const breathe = 1 + Math.sin(t * n.pulse + n.phase) * 0.18
-        const r = n.r * breathe
+      const weakP = drawWeakFade(t)
+      const winP = drawWinners(t, elapsed)
 
-        if (n.kind === 'hub') {
-          // Outer glow rings — mint + soft coral accent
-          ctx.beginPath()
-          ctx.arc(n.x, n.y, r * 3.4, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(168, 232, 156, 0.1)'
-          ctx.fill()
-          ctx.beginPath()
-          ctx.arc(n.x, n.y, r * 2.2, 0, Math.PI * 2)
-          ctx.strokeStyle = 'rgba(168, 232, 156, 0.55)'
-          ctx.lineWidth = 1.75
-          ctx.stroke()
-          ctx.beginPath()
-          ctx.arc(n.x, n.y, r * 1.55, 0, Math.PI * 2)
-          ctx.strokeStyle = 'rgba(255, 200, 87, 0.35)'
-          ctx.lineWidth = 1
-          ctx.stroke()
-          // Core
-          ctx.beginPath()
-          ctx.arc(n.x, n.y, r, 0, Math.PI * 2)
-          ctx.fillStyle = C.mintBright
-          ctx.fill()
-          ctx.strokeStyle = C.white
-          ctx.lineWidth = 1.25
-          ctx.stroke()
-          continue
-        }
+      if (t >= 1.15 && t < 2.45) drawFanOut(t)
 
-        if (n.kind === 'signal') {
-          const sx = n.x + Math.cos(t * 0.7 + n.phase) * 18
-          const sy = n.y + Math.sin(t * 0.55 + n.phase) * 12
-          // Amber diamond — distinct shape from circular SKUs
-          ctx.save()
-          drawDiamond(sx, sy, r * 1.35)
-          ctx.fillStyle = 'rgba(255, 200, 87, 0.88)'
-          ctx.fill()
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)'
-          ctx.lineWidth = 1
-          ctx.stroke()
-          // trail glow
-          ctx.beginPath()
-          ctx.arc(sx, sy, r * 2.4, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(255, 200, 87, 0.12)'
-          ctx.fill()
-          ctx.restore()
-          continue
-        }
+      drawHub(arrived ? 0.7 + Math.sin(elapsed * 2) * 0.15 : 0.25, arrived)
+      drawSkus(t, scoreP, weakP, winP, elapsed)
 
-        // SKU nodes — circles with state color + bright stroke
-        const alpha = 0.55 + Math.sin(t + n.phase) * 0.25
-        ctx.beginPath()
-        ctx.arc(n.x, n.y, r, 0, Math.PI * 2)
-        ctx.fillStyle = skuFill(n.state, Math.min(0.95, alpha))
-        ctx.fill()
-        ctx.strokeStyle = skuStroke(n.state)
-        ctx.lineWidth = n.state === 'ok' ? 1.15 : 1.5
-        ctx.stroke()
+      if (t >= 5.8) drawContextRing(t)
 
-        // Alert pulse ring
-        if (n.state === 'alert') {
-          const ring = r * (1.6 + Math.sin(t * 2.2 + n.phase) * 0.25)
-          ctx.beginPath()
-          ctx.arc(n.x, n.y, ring, 0, Math.PI * 2)
-          ctx.strokeStyle = `rgba(224, 122, 95, ${0.25 + Math.sin(t * 2 + n.phase) * 0.15})`
-          ctx.lineWidth = 1.25
-          ctx.stroke()
-        }
-      }
+      drawLegend()
+      drawBeatDots(t)
+    }
 
-      // HUD chips — strong color coding legend
-      drawHud(ctx, w, h, nodes)
-
-      if (!reduced) raf = requestAnimationFrame(draw)
+    const draw = (now: number) => {
+      const elapsed = (now - start) / 1000
+      const t = elapsed % LOOP
+      updateCaption(t)
+      paintScene(t, elapsed)
+      raf = requestAnimationFrame(draw)
     }
 
     layout()
-    draw()
+    if (reduced) {
+      captionRef.current = 'Winners + routine'
+      setCaption('Winners + routine')
+      paintScene(6.5, 6.5)
+    } else {
+      raf = requestAnimationFrame(draw)
+    }
 
     const onResize = () => {
       layout()
-      if (reduced) draw()
+      if (reduced) paintScene(6.5, 6.5)
     }
     window.addEventListener('resize', onResize)
     return () => {
@@ -428,96 +607,23 @@ export function ShelfMesh() {
         <span className="shelf-mesh__corner shelf-mesh__corner--bl" />
         <span className="shelf-mesh__corner shelf-mesh__corner--br" />
       </div>
+      <div className="shelf-mesh__caption" key={caption}>{caption}</div>
     </div>
   )
 }
 
-function drawHud(
+function drawDiamond(
   ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  nodes: Node[],
+  x: number,
+  y: number,
+  r: number,
 ) {
-  const skuCount = nodes.filter((n) => n.kind === 'sku').length
-  const alerts = nodes.filter((n) => n.kind === 'sku' && n.state === 'alert').length
-  const lows = nodes.filter((n) => n.kind === 'sku' && n.state === 'low').length
-
-  ctx.save()
-  ctx.font = '600 10px "IBM Plex Mono", monospace'
-
-  // Title chip
-  const title = 'SHELF GRAPH · LIVE'
-  const tw = ctx.measureText(title).width
-  roundRect(ctx, 12, 10, tw + 18, 22, 4)
-  ctx.fillStyle = 'rgba(15, 27, 57, 0.82)'
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(168, 232, 156, 0.55)'
-  ctx.lineWidth = 1
-  ctx.stroke()
-  ctx.fillStyle = C.mintBright
-  ctx.fillText(title, 21, 25)
-
-  // Legend chips top-right
-  const chips: { label: string; fill: string; stroke: string }[] = [
-    { label: 'HUB', fill: 'rgba(168, 232, 156, 0.95)', stroke: C.mintBright },
-    { label: 'SKU', fill: 'rgba(147, 183, 143, 0.9)', stroke: C.mint },
-    { label: 'SIGNAL', fill: 'rgba(255, 200, 87, 0.95)', stroke: C.amber },
-    { label: 'LOSS', fill: 'rgba(224, 122, 95, 0.95)', stroke: C.coral },
-  ]
-  let cx = w - 14
-  for (let i = chips.length - 1; i >= 0; i--) {
-    const chip = chips[i]
-    const cw = ctx.measureText(chip.label).width + 28
-    cx -= cw + 6
-    roundRect(ctx, cx, 10, cw, 22, 4)
-    ctx.fillStyle = 'rgba(10, 17, 36, 0.88)'
-    ctx.fill()
-    ctx.strokeStyle = chip.stroke
-    ctx.lineWidth = 1
-    ctx.stroke()
-    // color dot
-    ctx.beginPath()
-    ctx.arc(cx + 11, 21, 4, 0, Math.PI * 2)
-    ctx.fillStyle = chip.fill
-    ctx.fill()
-    ctx.fillStyle = 'rgba(255,255,255,0.88)'
-    ctx.fillText(chip.label, cx + 20, 25)
-  }
-
-  // Bottom status bar
-  const status = `${skuCount} SKUs  ·  ${lows} LOW  ·  ${alerts} ALERT  ·  intent mesh`
-  const sw = ctx.measureText(status).width
-  roundRect(ctx, 12, h - 30, sw + 20, 20, 4)
-  ctx.fillStyle = 'rgba(10, 17, 36, 0.85)'
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(122, 148, 196, 0.4)'
-  ctx.lineWidth = 1
-  ctx.stroke()
-
-  // Multi-color status text segments
-  let tx = 22
-  ctx.fillStyle = 'rgba(255,255,255,0.7)'
-  ctx.fillText(`${skuCount} SKUs`, tx, h - 16)
-  tx += ctx.measureText(`${skuCount} SKUs`).width + 8
-  ctx.fillStyle = 'rgba(122, 148, 196, 0.7)'
-  ctx.fillText('·', tx, h - 16)
-  tx += 12
-  ctx.fillStyle = C.amber
-  ctx.fillText(`${lows} LOW`, tx, h - 16)
-  tx += ctx.measureText(`${lows} LOW`).width + 8
-  ctx.fillStyle = 'rgba(122, 148, 196, 0.7)'
-  ctx.fillText('·', tx, h - 16)
-  tx += 12
-  ctx.fillStyle = C.coral
-  ctx.fillText(`${alerts} ALERT`, tx, h - 16)
-  tx += ctx.measureText(`${alerts} ALERT`).width + 8
-  ctx.fillStyle = 'rgba(122, 148, 196, 0.7)'
-  ctx.fillText('·', tx, h - 16)
-  tx += 12
-  ctx.fillStyle = C.mint
-  ctx.fillText('intent mesh', tx, h - 16)
-
-  ctx.restore()
+  ctx.beginPath()
+  ctx.moveTo(x, y - r)
+  ctx.lineTo(x + r, y)
+  ctx.lineTo(x, y + r)
+  ctx.lineTo(x - r, y)
+  ctx.closePath()
 }
 
 function roundRect(
