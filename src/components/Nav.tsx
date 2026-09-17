@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react';
-import { links } from '../config/links';
-import { brand, nav } from '../data/copy';
+import { useEffect, useState } from 'react'
+import { links } from '../config/links'
+import { brand, nav } from '../data/copy'
 
 export function Nav() {
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    const onScroll = () => setScrolled(window.scrollY > 16)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
     <header className={`nav ${scrolled ? 'nav--scrolled' : ''}`}>
@@ -37,5 +37,5 @@ export function Nav() {
         </div>
       </div>
     </header>
-  );
+  )
 }

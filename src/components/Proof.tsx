@@ -1,9 +1,9 @@
-import { motion } from 'framer-motion';
-import { proofCopy } from '../data/copy';
-import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import { motion } from 'framer-motion'
+import { proofCopy } from '../data/copy'
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 
 export function Proof() {
-  const reduced = usePrefersReducedMotion();
+  const reduced = usePrefersReducedMotion()
 
   return (
     <section className="proof" id={proofCopy.id} aria-labelledby="proof-title">
@@ -15,12 +15,13 @@ export function Proof() {
 
         <motion.div
           className="proof__grid"
-          initial={reduced ? false : { opacity: 0, y: 24 }}
+          initial={reduced ? false : { opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.55 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
           <article className="proof-card proof-card--outcome">
+            <div className="proof-card__glow" aria-hidden />
             <p className="proof-card__metric">{proofCopy.outcome.metric}</p>
             <p className="proof-card__label">{proofCopy.outcome.label}</p>
             <p className="proof-card__detail">{proofCopy.outcome.detail}</p>
@@ -49,5 +50,5 @@ export function Proof() {
         </div>
       </div>
     </section>
-  );
+  )
 }
