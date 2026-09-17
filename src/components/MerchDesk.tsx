@@ -1,9 +1,11 @@
-import { useRef } from 'react';
-import { motion } from 'framer-motion';
-import { merchCopy } from '../data/copy';
-import { merchCards, type MerchCard } from '../data/merchDesk';
-import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
-import { useScrollProgress } from '../hooks/useScrollProgress';
+import { useRef } from 'react'
+import { motion } from 'framer-motion'
+import { merchCopy } from '../data/copy'
+import { merchCards, type MerchCard } from '../data/merchDesk'
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
+import { useScrollProgress } from '../hooks/useScrollProgress'
+
+const softEase = [0.22, 1, 0.36, 1] as const
 
 function InboxCard({
   card,
@@ -11,27 +13,39 @@ function InboxCard({
   visible,
   reduced,
 }: {
-  card: MerchCard;
-  index: number;
-  visible: boolean;
-  reduced: boolean;
+  card: MerchCard
+  index: number
+  visible: boolean
+  reduced: boolean
 }) {
+  const hidden = {
+    opacity: 0,
+    y: 72,
+    scale: 0.9,
+    rotateX: 12,
+    rotateZ: -2.5 + index * 0.7,
+    filter: 'blur(8px)',
+  }
+  const shown = {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    rotateX: 0,
+    rotateZ: 0,
+    filter: 'blur(0px)',
+  }
+
   return (
     <motion.article
-      className={`inbox-card inbox-card--${card.tone}`}
-      initial={reduced ? false : { opacity: 0, y: 40, rotate: -1.5 + index * 0.4 }}
-      animate={
-        visible
-          ? { opacity: 1, y: 0, rotate: 0 }
-          : reduced
-            ? { opacity: 1, y: 0, rotate: 0 }
-            : { opacity: 0, y: 40, rotate: -1.5 + index * 0.4 }
-      }
+      className={`inbox-card inbox-card--${card.tone}${visible ? ' is-entering' : ''}`}
+      initial={reduced ? false : hidden}
+      animate={visible || reduced ? shown : hidden}
       transition={{
-        duration: 0.45,
-        delay: reduced ? 0 : index * 0.08,
-        ease: [0.22, 1, 0.36, 1],
+        duration: 0.55,
+        delay: reduced ? 0 : index * 0.1,
+        ease: softEase,
       }}
+      style={{ transformOrigin: 'center top' }}
     >
       <header className="inbox-card__head">
         <span className={`inbox-card__type inbox-card__type--${card.tone}`}>
@@ -59,21 +73,21 @@ function InboxCard({
         </button>
       </footer>
     </motion.article>
-  );
+  )
 }
 
 export function MerchDesk() {
-  const reduced = usePrefersReducedMotion();
-  const containerRef = useRef<HTMLElement>(null);
-  const progress = useScrollProgress(containerRef);
+  const reduced = usePrefersReducedMotion()
+  const containerRef = useRef<HTMLElement>(null)
+  const progress = useScrollProgress(containerRef)
 
-  // Cascade: cards appear as progress advances
+  // Staggered cascade tied to scroll — cards slam in one-by-one
   const visibleCount = reduced
     ? merchCards.length
     : Math.min(
         merchCards.length,
-        Math.max(0, Math.ceil(progress * (merchCards.length + 0.4))),
-      );
+        Math.max(0, Math.ceil(progress * (merchCards.length + 0.55))),
+      )
 
   return (
     <section
@@ -93,9 +107,15 @@ export function MerchDesk() {
           <div className="merch__desk">
             <div className="merch__rail" aria-hidden>
               <div className="merch__rail-label">Inbox · overnight</div>
-              <div className="merch__rail-count">
+              <motion.div
+                className="merch__rail-count"
+                key={visibleCount}
+                initial={reduced ? false : { scale: 0.85, opacity: 0.5 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+              >
                 {visibleCount}/{merchCards.length} proposals
-              </div>
+              </motion.div>
             </div>
 
             <div className="inbox-cascade">
@@ -113,5 +133,5 @@ export function MerchDesk() {
         </div>
       </div>
     </section>
-  );
+  )
 }

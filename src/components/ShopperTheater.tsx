@@ -1,6 +1,6 @@
-import { useMemo, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { theaterCopy } from '../data/copy';
+import { useMemo, useRef } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { theaterCopy } from '../data/copy'
 import {
   aurixProducts,
   beatLabels,
@@ -9,16 +9,19 @@ import {
   failProducts,
   parseChips,
   type ProductCard,
-} from '../data/theater';
-import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
-import { beatFromProgress, useScrollProgress } from '../hooks/useScrollProgress';
+} from '../data/theater'
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
+import { beatFromProgress, useScrollProgress } from '../hooks/useScrollProgress'
+
+const spring = { type: 'spring' as const, stiffness: 380, damping: 28 }
+const softEase = [0.22, 1, 0.36, 1] as const
 
 function ProductTile({
   product,
   mode,
 }: {
-  product: ProductCard;
-  mode: 'fail' | 'win';
+  product: ProductCard
+  mode: 'fail' | 'win'
 }) {
   return (
     <div
@@ -44,14 +47,19 @@ function ProductTile({
         {mode === 'win' && (
           <div className="fit-bar" aria-label={`Fit score ${product.fit}`}>
             <div className="fit-bar__track">
-              <div className="fit-bar__fill" style={{ width: `${product.fit}%` }} />
+              <motion.div
+                className="fit-bar__fill"
+                initial={{ width: 0 }}
+                animate={{ width: `${product.fit}%` }}
+                transition={{ duration: 0.7, ease: softEase, delay: 0.15 }}
+              />
             </div>
             <span className="fit-bar__label">{product.fit}% fit</span>
           </div>
         )}
       </div>
     </div>
-  );
+  )
 }
 
 function ExplainPanel() {
@@ -82,33 +90,40 @@ function ExplainPanel() {
         <p>{explainPanel.sentiment}</p>
       </div>
     </aside>
-  );
+  )
 }
 
 export function ShopperTheater() {
-  const reduced = usePrefersReducedMotion();
-  const containerRef = useRef<HTMLElement>(null);
-  const progress = useScrollProgress(containerRef);
-  const beat = reduced ? 4 : beatFromProgress(progress, 5);
+  const reduced = usePrefersReducedMotion()
+  const containerRef = useRef<HTMLElement>(null)
+  const progress = useScrollProgress(containerRef)
+  const beat = reduced ? 4 : beatFromProgress(progress, 5)
 
   const typedLen = useMemo(() => {
-    if (reduced) return beautyQuery.length;
-    if (beat < 1) return 0;
+    if (reduced) return beautyQuery.length
+    if (beat < 1) return 0
     if (beat === 1) {
-      // type through beat 1 portion of scroll
-      const local = Math.min(1, Math.max(0, progress * 5 - 1));
-      return Math.floor(local * beautyQuery.length);
+      const local = Math.min(1, Math.max(0, progress * 5 - 1))
+      return Math.floor(local * beautyQuery.length)
     }
-    return beautyQuery.length;
-  }, [beat, progress, reduced]);
+    return beautyQuery.length
+  }, [beat, progress, reduced])
 
-  const showChips = beat >= 2;
-  const showAurix = beat >= 3;
-  const showExplain = beat >= 3;
-  const showRecover = beat >= 4;
+  const showChips = beat >= 2
+  const showAurix = beat >= 3
+  const showExplain = beat >= 3
+  const showRecover = beat >= 4
 
-  const products = showAurix ? aurixProducts : failProducts;
-  const mode = showAurix ? 'win' : 'fail';
+  const products = showAurix ? aurixProducts : failProducts
+  const mode = showAurix ? 'win' : 'fail'
+
+  const stageClass = [
+    'stage-card',
+    showAurix ? 'stage-card--live' : '',
+    showRecover ? 'stage-card--recover' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <section
@@ -144,8 +159,11 @@ export function ShopperTheater() {
               ))}
             </div>
 
-            <div className="stage-card">
-              <div className="search-bar" aria-live="polite">
+            <div className={stageClass}>
+              <div
+                className={`search-bar ${beat === 1 && !reduced ? 'search-bar--typing' : ''}`}
+                aria-live="polite"
+              >
                 <span className="search-bar__icon" aria-hidden>
                   ⌕
                 </span>
@@ -163,18 +181,22 @@ export function ShopperTheater() {
                   <motion.div
                     key="chips"
                     className="parse-chips"
-                    initial={reduced ? false : { opacity: 0, y: 8 }}
+                    initial={reduced ? false : { opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.35 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.35, ease: softEase }}
                   >
                     {parseChips.map((c, i) => (
                       <motion.span
                         key={c.id}
                         className={`chip chip--${c.tone}`}
-                        initial={reduced ? false : { opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: reduced ? 0 : i * 0.08 }}
+                        initial={reduced ? false : { opacity: 0, scale: 0.7, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={
+                          reduced
+                            ? { duration: 0 }
+                            : { ...spring, delay: 0.05 + i * 0.1 }
+                        }
                       >
                         {c.label}
                       </motion.span>
@@ -184,31 +206,43 @@ export function ShopperTheater() {
               </AnimatePresence>
 
               <div className={`stage-body ${showExplain ? 'stage-body--split' : ''}`}>
-                <div className="product-grid">
-                  <AnimatePresence mode="popLayout">
-                    {products.map((p) => (
+                {/* mode="wait" + grid keyed by mode → no ghost cards behind re-rank */}
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={mode}
+                    className="product-grid"
+                    initial={
+                      reduced ? false : { opacity: 0, y: 28, filter: 'blur(8px)' }
+                    }
+                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, y: -18, filter: 'blur(6px)' }}
+                    transition={{ duration: 0.4, ease: softEase }}
+                  >
+                    {products.map((p, i) => (
                       <motion.div
-                        key={`${mode}-${p.id}`}
-                        layout
-                        initial={reduced ? false : { opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.96 }}
-                        transition={{ duration: 0.35 }}
+                        key={p.id}
+                        initial={reduced ? false : { opacity: 0, y: 22, scale: 0.94 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={
+                          reduced
+                            ? { duration: 0 }
+                            : { duration: 0.4, ease: softEase, delay: 0.05 + i * 0.07 }
+                        }
                       >
                         <ProductTile product={p} mode={mode} />
                       </motion.div>
                     ))}
-                  </AnimatePresence>
-                </div>
+                  </motion.div>
+                </AnimatePresence>
 
-                <AnimatePresence>
+                <AnimatePresence mode="wait">
                   {showExplain && (
                     <motion.div
                       key="explain"
-                      initial={reduced ? false : { opacity: 0, x: 24 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.4 }}
+                      initial={reduced ? false : { opacity: 0, x: 36, scale: 0.96 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 16 }}
+                      transition={{ duration: 0.45, ease: softEase }}
                     >
                       <ExplainPanel />
                     </motion.div>
@@ -216,14 +250,15 @@ export function ShopperTheater() {
                 </AnimatePresence>
               </div>
 
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {showRecover && (
                   <motion.p
                     key="recover"
                     className="recover-banner"
-                    initial={reduced ? false : { opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={reduced ? false : { opacity: 0, y: 16, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0 }}
+                    transition={{ duration: 0.45, ease: softEase }}
                   >
                     <span className="text-mint">Moment recovered.</span> She found the
                     serum she meant — explained, priced, and in stock.
@@ -235,5 +270,5 @@ export function ShopperTheater() {
         </div>
       </div>
     </section>
-  );
+  )
 }

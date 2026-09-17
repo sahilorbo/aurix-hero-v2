@@ -12,9 +12,9 @@ export function Hook() {
       <div className="container hook__inner">
         <motion.p
           className="eyebrow"
-          initial={reduced ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          initial={reduced ? false : { opacity: 0, y: 16, letterSpacing: '0.2em' }}
+          animate={{ opacity: 1, y: 0, letterSpacing: '0.12em' }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
           {hook.eyebrow}
         </motion.p>
@@ -22,9 +22,9 @@ export function Hook() {
         <motion.h1
           id="hook-title"
           className="hook__title"
-          initial={reduced ? false : { opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: reduced ? 0 : 0.08 }}
+          initial={reduced ? false : { opacity: 0, y: 32, filter: 'blur(8px)' }}
+          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          transition={{ duration: 0.75, delay: reduced ? 0 : 0.1, ease: [0.22, 1, 0.36, 1] }}
         >
           The self-driving{' '}
           <span className="text-mint">beauty shelf</span>
