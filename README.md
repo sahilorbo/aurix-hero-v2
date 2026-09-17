@@ -56,4 +56,4 @@ Edit copy without hunting JSX:
 
 ## Palette
 
-Dark navy / mint / coral (CSS variables in `src/index.css`).
+Official brief tokens in `src/index.css`: blues #0F1B39 / #0A1124 / #1A2947, greens #93B78F + bright oklch, coral loss, fonts Sora / Inter / IBM Plex Mono.

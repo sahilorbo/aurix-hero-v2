@@ -1,31 +1,53 @@
 /* ─── Aurix Hero v2 — design tokens ─── */
 :root {
-  --navy-950: #050a18;
-  --navy-900: #0a1228;
-  --navy-850: #0e1833;
-  --navy-800: #142044;
-  --navy-700: #1c2d5a;
-  --ink: #e8eefc;
-  --ink-muted: #9aabc9;
-  --ink-dim: #6b7d9e;
-  --mint: #7dffc3;
-  --mint-soft: #b5ead7;
-  --mint-dim: rgba(125, 255, 195, 0.14);
-  --mint-border: rgba(125, 255, 195, 0.35);
-  --coral: #ff7a6e;
-  --coral-soft: #ffb4ac;
-  --coral-dim: rgba(255, 122, 110, 0.14);
+  /* Blues (official brief) */
+  --blue-page: #0F1B39;
+  --blue-deep: #0A1124;
+  --blue-soft: #1A2947;
+
+  /* Legacy navy aliases → brief blues */
+  --navy-950: var(--blue-deep);
+  --navy-900: var(--blue-page);
+  --navy-850: #121f3f;
+  --navy-800: var(--blue-soft);
+  --navy-700: var(--blue-soft);
+
+  /* Whites */
+  --ink: oklch(0.99 0 0);
+  --ink-muted: oklch(0.99 0 0 / 0.72);
+  --ink-dim: oklch(0.99 0 0 / 0.48);
+
+  /* Greens */
+  --mint: #93B78F;
+  --mint-hover: #7D9F73;
+  --mint-bright: oklch(0.84 0.15 150);
+  --mint-soft: oklch(0.84 0.15 150);
+  --mint-dim: rgba(147, 183, 143, 0.18);
+  --mint-border: rgba(147, 183, 143, 0.35);
+
+  /* Loss / coral */
+  --coral: oklch(0.70 0.15 25);
+  --coral-soft: oklch(0.78 0.12 25);
+  --coral-dim: oklch(0.70 0.15 25 / 0.14);
+
+  /* Supporting */
   --amber: #ffc857;
   --amber-dim: rgba(255, 200, 87, 0.14);
-  --card: #111b36;
-  --card-elevated: #162246;
-  --border: rgba(232, 238, 252, 0.08);
-  --border-strong: rgba(232, 238, 252, 0.16);
+  --card: #121f3f;
+  --card-elevated: var(--blue-soft);
+  --border: oklch(0.99 0 0 / 0.08);
+  --border-strong: oklch(0.99 0 0 / 0.16);
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 22px;
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Fonts */
+  --font-display: 'Sora', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font: var(--font-body);
+
   --nav-h: 72px;
   --container: 1120px;
 }
@@ -70,7 +92,7 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background-image: radial-gradient(rgba(232, 238, 252, 0.045) 1px, transparent 1px);
+  background-image: radial-gradient(oklch(0.99 0 0 / 0.045) 1px, transparent 1px);
   background-size: 22px 22px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
 }
@@ -112,8 +134,31 @@ p {
   margin: 0;
 }
 
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+code,
+.eyebrow,
+.fit-bar__label,
+.explain__score-num,
+.explain__score-unit,
+.explain__label,
+.inbox-card__type,
+.inbox-card__impact,
+.inbox-card__label,
+.merch__rail-count,
+.theater__beat-num,
+.proof-card__metric,
+.logo-row__label,
+.footer__note code {
+  font-family: var(--font-mono);
+}
+
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85em;
   color: var(--mint-soft);
 }
@@ -162,11 +207,11 @@ code {
 .btn--primary {
   background: var(--mint);
   color: var(--navy-950);
-  box-shadow: 0 0 0 1px rgba(125, 255, 195, 0.25), 0 10px 30px rgba(125, 255, 195, 0.18);
+  box-shadow: 0 0 0 1px rgba(147, 183, 143, 0.25), 0 10px 30px rgba(147, 183, 143, 0.18);
 }
 
 .btn--primary:hover {
-  background: #9dffd4;
+  background: var(--mint-hover);
 }
 
 .btn--outline {
@@ -197,10 +242,10 @@ code {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mint);
+  color: var(--mint-bright);
   margin-bottom: 1rem;
 }
 
@@ -223,7 +268,7 @@ code {
   font-size: clamp(1.75rem, 3.2vw, 2.6rem);
   line-height: 1.15;
   letter-spacing: -0.03em;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .section-sub {
@@ -250,7 +295,7 @@ code {
 }
 
 .nav--scrolled {
-  background: rgba(10, 18, 40, 0.82);
+  background: color-mix(in srgb, var(--blue-deep) 82%, transparent);
   backdrop-filter: blur(16px);
   border-bottom-color: var(--border);
 }
@@ -265,8 +310,9 @@ code {
 }
 
 .nav__logo {
+  font-family: var(--font-display);
   font-size: 1.35rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.04em;
   text-transform: lowercase;
 }
@@ -305,8 +351,8 @@ code {
   position: absolute;
   inset: -20% 10% auto;
   height: 60%;
-  background: radial-gradient(ellipse at center, rgba(125, 255, 195, 0.12), transparent 65%),
-    radial-gradient(ellipse at 70% 40%, rgba(255, 122, 110, 0.08), transparent 50%);
+  background: radial-gradient(ellipse at center, rgba(147, 183, 143, 0.14), transparent 65%),
+    radial-gradient(ellipse at 70% 40%, oklch(0.70 0.15 25 / 0.1), transparent 50%);
   pointer-events: none;
 }
 
@@ -321,7 +367,7 @@ code {
   font-size: clamp(2.5rem, 6.5vw, 4.4rem);
   line-height: 1.05;
   letter-spacing: -0.04em;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .hook__sub {
@@ -354,19 +400,19 @@ code {
   height: 8px;
   border-radius: 50%;
   background: var(--mint);
-  box-shadow: 0 0 0 0 rgba(125, 255, 195, 0.55);
+  box-shadow: 0 0 0 0 rgba(147, 183, 143, 0.55);
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(125, 255, 195, 0.45);
+    box-shadow: 0 0 0 0 rgba(147, 183, 143, 0.45);
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(125, 255, 195, 0);
+    box-shadow: 0 0 0 10px rgba(147, 183, 143, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(125, 255, 195, 0);
+    box-shadow: 0 0 0 0 rgba(147, 183, 143, 0);
   }
 }
 
@@ -444,7 +490,7 @@ code {
 }
 
 .theater__beat.is-active .theater__beat-num {
-  background: rgba(5, 10, 24, 0.2);
+  background: color-mix(in srgb, var(--blue-deep) 20%, transparent);
 }
 
 .stage-card {
@@ -463,7 +509,7 @@ code {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  background: rgba(5, 10, 24, 0.55);
+  background: color-mix(in srgb, var(--blue-deep) 55%, transparent);
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   padding: 0.85rem 1.1rem;
@@ -526,7 +572,7 @@ code {
 .chip--coral {
   background: var(--coral-dim);
   color: var(--coral-soft);
-  border-color: rgba(255, 122, 110, 0.35);
+  border-color: oklch(0.70 0.15 25 / 0.35);
 }
 
 .stage-body {
@@ -554,13 +600,13 @@ code {
   gap: 0.7rem;
   padding: 0.75rem;
   border-radius: var(--radius-sm);
-  background: rgba(5, 10, 24, 0.4);
+  background: color-mix(in srgb, var(--blue-deep) 40%, transparent);
   border: 1px solid var(--border);
 }
 
 .product-tile--hero {
   border-color: var(--mint-border);
-  box-shadow: 0 0 0 1px rgba(125, 255, 195, 0.08), 0 12px 28px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 1px rgba(147, 183, 143, 0.08), 0 12px 28px rgba(0, 0, 0, 0.25);
 }
 
 .product-tile--fail {
@@ -569,7 +615,7 @@ code {
 
 .product-tile__swatch {
   border-radius: 10px;
-  background: linear-gradient(145deg, #24325a, #152040);
+  background: linear-gradient(145deg, var(--blue-soft), var(--blue-deep));
   display: grid;
   place-items: center;
   height: 56px;
@@ -579,7 +625,7 @@ code {
   width: 18px;
   height: 34px;
   border-radius: 6px 6px 8px 8px;
-  background: linear-gradient(180deg, var(--mint-soft), #4ecf9a 55%, #1a3d32);
+  background: linear-gradient(180deg, var(--mint-bright), var(--mint) 55%, #2a4030);
   position: relative;
 }
 
@@ -592,7 +638,7 @@ code {
   width: 8px;
   height: 8px;
   border-radius: 2px;
-  background: #c8f5e0;
+  background: var(--mint-bright);
 }
 
 .product-tile__meta {
@@ -655,7 +701,7 @@ code {
 }
 
 .explain {
-  background: rgba(5, 10, 24, 0.55);
+  background: color-mix(in srgb, var(--blue-deep) 55%, transparent);
   border: 1px solid var(--mint-border);
   border-radius: var(--radius);
   padding: 1rem;
@@ -684,8 +730,8 @@ code {
 
 .explain__score-num {
   font-size: 1.4rem;
-  font-weight: 750;
-  color: var(--mint);
+  font-weight: 600;
+  color: var(--mint-bright);
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -913,13 +959,13 @@ code {
 }
 
 .proof-card--outcome {
-  background: linear-gradient(145deg, rgba(125, 255, 195, 0.1), var(--card));
+  background: linear-gradient(145deg, rgba(147, 183, 143, 0.12), var(--card));
   border-color: var(--mint-border);
 }
 
 .proof-card__metric {
   font-size: clamp(3.5rem, 8vw, 5.5rem);
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: -0.05em;
   line-height: 1;
   color: var(--mint);
@@ -1019,8 +1065,8 @@ code {
   border-radius: var(--radius-lg);
   border: 1px solid var(--mint-border);
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(125, 255, 195, 0.14), transparent 50%),
-    radial-gradient(ellipse at 90% 100%, rgba(255, 122, 110, 0.1), transparent 45%),
+    radial-gradient(ellipse at 20% 0%, rgba(147, 183, 143, 0.16), transparent 50%),
+    radial-gradient(ellipse at 90% 100%, oklch(0.70 0.15 25 / 0.1), transparent 45%),
     linear-gradient(180deg, var(--card-elevated), var(--navy-850));
   box-shadow: var(--shadow);
 }
@@ -1051,7 +1097,7 @@ code {
 .footer {
   border-top: 1px solid var(--border);
   padding: 3rem 0 2rem;
-  background: rgba(5, 10, 24, 0.5);
+  background: color-mix(in srgb, var(--blue-deep) 50%, transparent);
 }
 
 .footer__inner {
