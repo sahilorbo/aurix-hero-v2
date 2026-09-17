@@ -16,7 +16,6 @@ export const nav = {
 export const hook = {
   eyebrow: 'Beauty discovery · Merch Studio',
   h1: 'The self-driving beauty shelf',
-  sub: 'Your catalog finds, ranks, and completes what shoppers mean — you approve what goes live.',
   primaryCta: 'Run Search Audit on your site',
   secondaryCta: 'Book a strategy demo',
   promise: 'Live in under four hours',

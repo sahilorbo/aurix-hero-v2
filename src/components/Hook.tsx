@@ -37,15 +37,6 @@ export function Hook() {
             <span className="text-mint">beauty shelf</span>
           </motion.h1>
 
-          <motion.p
-            className="hook__sub"
-            initial={reduced ? false : { opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: reduced ? 0 : 0.18, ease }}
-          >
-            {hook.sub}
-          </motion.p>
-
           <motion.div
             className="hook__ctas"
             initial={reduced ? false : { opacity: 0, y: 14 }}
