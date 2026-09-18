@@ -51,7 +51,8 @@ function beatFocus(t: number, i: number, dim = 0.38) {
 
 /**
  * Staged discovery story: query → fan-out → scores → weak fade → winners pulse.
- * ~16s loop; prior beats persist dimmed. Prefers-reduced-motion → final winning state.
+ * ~16s loop; canvas prior beats persist dimmed. Beat captions show only the active
+ * step, then clear. Prefers-reduced-motion → final winning state.
  * SKU nodes are beauty product silhouettes (bottles / brushes), not abstract dots.
  */
 export function ShelfMesh() {
@@ -674,22 +675,12 @@ export function ShelfMesh() {
         <span className="shelf-mesh__corner shelf-mesh__corner--br" />
       </div>
       <div className="shelf-mesh__beats">
-        {BEATS.map((b, i) => {
-          if (i > activeBeat) return null
-          const isActive = i === activeBeat
-          return (
-            <span
-              key={b.caption}
-              className={
-                isActive
-                  ? 'shelf-mesh__beat shelf-mesh__beat--active'
-                  : 'shelf-mesh__beat shelf-mesh__beat--past'
-              }
-            >
-              {b.caption}
-            </span>
-          )
-        })}
+        <span
+          key={BEATS[activeBeat].caption}
+          className="shelf-mesh__beat shelf-mesh__beat--active"
+        >
+          {BEATS[activeBeat].caption}
+        </span>
       </div>
     </div>
   )

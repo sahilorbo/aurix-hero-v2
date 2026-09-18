@@ -563,13 +563,13 @@ code {
 .shelf-mesh__beats {
   position: absolute;
   left: 50%;
-  bottom: 26px;
+  /* Sit in upper mesh — clear of bottom INTENT/RANK/YOU strip */
+  top: 18%;
+  bottom: auto;
   transform: translateX(-50%);
   z-index: 2;
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: 0.35rem;
   max-width: min(92%, 420px);
   pointer-events: none;
 }
@@ -592,11 +592,9 @@ code {
   box-shadow: 0 0 12px rgba(168, 232, 156, 0.18);
 }
 
+/* Past captions are unmounted when their beat ends — no sticky stack. */
 .shelf-mesh__beat--past {
-  color: rgba(180, 200, 230, 0.72);
-  background: rgba(10, 17, 36, 0.62);
-  border: 1px solid rgba(122, 148, 196, 0.28);
-  opacity: 0.72;
+  display: none;
 }
 
 @keyframes shelf-beat-in {
